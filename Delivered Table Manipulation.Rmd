@@ -1,0 +1,97 @@
+---
+title: "Delivered Table Manipulation"
+output: html_document
+---
+# Loading Packages
+```{r}
+library(tidyverse)
+library(readr)
+library(skimr)
+library(lubridate)
+library(readxl)
+library(writexl)
+```
+
+### Importing the data File
+```{r}
+delivered_table <- read_excel('~/Desktop/Delivered June 2022.xlsx')
+```
+
+### Data Manipulation
+```{r}
+#REMOVE UNEEDED COLUMNS
+delivered_table <- delivered_table[, !(colnames(delivered_table) %in% c('key'))]
+
+#UPPERCASING ALL HEADERS
+names(delivered_table) <- toupper(names(delivered_table))
+
+#RENAMING THE HEADERS
+delivered_table <- delivered_table %>%
+  rename(
+    'CUSTOMER NAME' = CUSTOMER,
+    'DELIVERY DATE' = DELIVERYDATE,
+    'PRICE AFTER DISCOUNT' = DISCOUNTEDPRICE,
+    'SUPPLIER EARNINGS USD' = EARNINGSUSD,
+    'EXTRA FEES TYPE' = EXTRAFEESTYPE,
+    'INVOICE ID' = INVOICEID,
+    'ORDER CREATION DATE' = ORDERCREATIONDATE,
+    'ORDER ID' = ORDERID,
+    'EXTRA FEES' = PAYMENTS,
+    'PRICE BEFORE DISCOUNT' = PRICE,
+    'RETURN DATE' = RETURNEDAT,
+    'SHIPPING FEES' = SHIPPING,
+    'STORE' = STOREID,
+    'SUPPLIER NAME' = SUPPLIER,
+    'ORDER TYPE' = TYPE
+  )
+
+#ADD NET PRICE COLUMN
+delivered_table$`NET PRICE` <- delivered_table$`PRICE AFTER DISCOUNT` + delivered_table$`SHIPPING FEES` + delivered_table$`EXTRA FEES`
+
+#REORDERING COLUMNS
+delivered_table <- delivered_table[,c('INVOICE ID', 'ORDER ID', 'SKU', 'STORE', 'CUSTOMER NAME', 'SUPPLIER NAME', 'SUPPLIER EARNINGS USD', 'ORDER TYPE', 'ORDER CREATION DATE', 'DELIVERY DATE', 'RETURN DATE', 'CURRENCY', 'PRICE BEFORE DISCOUNT', 'PRICE AFTER DISCOUNT', 'SHIPPING FEES', 'EXTRA FEES', 'EXTRA FEES TYPE', 'NET PRICE')]
+
+#FIXING THE TRY ON AMOUNTS
+delivered_table$`PRICE BEFORE DISCOUNT` <- ifelse(delivered_table$`ORDER TYPE` == "TRY ON", 0, delivered_table$`PRICE BEFORE DISCOUNT`)
+
+#Fixing the dates so the format is correct in excel
+delivered_table$`ORDER CREATION DATE` <- paste(month(delivered_table$`ORDER CREATION DATE`), day(delivered_table$`ORDER CREATION DATE`), year(delivered_table$`ORDER CREATION DATE`), sep = '-')
+delivered_table$`DELIVERY DATE` <- paste(month(delivered_table$`DELIVERY DATE`), day(delivered_table$`DELIVERY DATE`), year(delivered_table$`DELIVERY DATE`), sep = '-')
+delivered_table$`RETURN DATE` <- paste(month(delivered_table$`RETURN DATE`), day(delivered_table$`RETURN DATE`), year(delivered_table$`RETURN DATE`), sep = '-')
+delivered_table$`RETURN DATE` <- str_replace(delivered_table$`RETURN DATE`, "NA-NA-NA", "NA")
+
+#FIXING THE TYPES OF THE COLUMN VALUES
+transform(delivered_table,
+          'SUPPLIER EARNINGS USD' = as.numeric(delivered_table$`SUPPLIER EARNINGS USD`),
+          'ORDER ID' = as.character(delivered_table$`ORDER ID`),
+          #'RETURN DATE' = as.Date(delivered_table$`RETURN DATE`),
+          'STORE' = as.character(delivered_table$STORE)
+          )
+
+#Replace "Leb Supplier" & "uae Supplier" by "Designer-24"
+delivered_table$`SUPPLIER NAME` <- str_replace(delivered_table$`SUPPLIER NAME`, "Leb Supplier", "Designer-24")
+delivered_table$`SUPPLIER NAME` <- str_replace(delivered_table$`SUPPLIER NAME`, "UAE Supplier", "Designer-24")
+
+#FIND AND REPLACE THE STORE IDs WITH 3 LETTER INITIALS
+delivered_table$STORE <- str_replace(delivered_table$STORE, "1" , "UAE")
+delivered_table$STORE <- str_replace(delivered_table$STORE, "2" , "LEB")
+delivered_table$STORE <- str_replace(delivered_table$STORE, "3" , "JOR")
+
+
+#DELETE DUPLICATE SHIPMENTS
+order_list <- vector(mode = "list")
+for ( o in 1:nrow(delivered_table)){
+  if (delivered_table$`ORDER ID`[o] %in% order_list){
+    #replace(delivered_table$`SHIPPING FEES`[o],delivered_table$`SHIPPING FEES`[o],0)
+    delivered_table$`SHIPPING FEES`[o] <- 0
+  }
+  order_list <- append(order_list,delivered_table$`ORDER ID`[o])
+}
+
+#Export file to Excel
+write_csv(delivered_table, '~/Desktop/Delivered Table.csv')
+
+
+
+```
+
